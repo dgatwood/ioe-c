@@ -1,9 +1,16 @@
-
+#include <inttypes.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <strings.h>
 
 #include "constants.h"
 
+#undef FIXME
+
 typedef struct {
-    bool modeSupported[PIN_MODE_MAX+1];
+    bool modeSupported[PIN_MODE_INVALID];
     int mode;
     int port;
     int pinNumber;
@@ -21,12 +28,15 @@ typedef struct {
     // The PxS Schmitt trigger register
     uint8_t reg_ps, reg_int_mask_p;
 
+    // ADC pin values
+    int adc_channel;
+
     // PWM pin values
     int pwm_channel;
     uint8_t reg_iopwm;
     uint8_t reg_pwml;
     uint8_t reg_pwmh;
-} pin_t:
+} pin_t;
 
 typedef int i2c_addr_t;  // TYPE?
 typedef int i2c_dev_t;   // TYPE?
@@ -42,11 +52,19 @@ typedef struct {
     gpio_t _gpio;
     int _encoder_offset[4];
     int _encoder_last[4];
+    pin_t *_pins[14];
 } ioexpander_t;
 
 
 
-void ioexpander_pin_init(pin_t *pin, int port, int pinNumber) {
+uint8_t _ioe_i2c_read8(ioexpander_t *ioe, int reg);
+void _ioe_i2c_write8(ioexpander_t *ioe, int reg, uint8_t value);
+void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel);
+void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, int reg_iopwm);
+
+
+pin_t *ioe_pin(int port, int pinNumber) {
+    pin_t *pin = malloc(sizeof(*pin));
     pin->modeSupported[PIN_MODE_IO] = true;
     pin->mode = PIN_MODE_INVALID;
     pin->port = port;
@@ -78,10 +96,16 @@ void ioexpander_pin_init(pin_t *pin, int port, int pinNumber) {
             fprintf(stderr, "Invalid port (%d).\n", port);
             exit(1);
     }
+    return pin;
 }
 
-void ioexpander_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, int reg_iopwm) {
-    ioexpander_pin_init(pin, port, pinNumber);
+pin_t *ioe_pwm_pin(int port, int pinNumber, int channel, int reg_iopwm) {
+    pin_t *pin = ioe_pin(port, pinNumber);
+    _ioe_pwm_pin_init(pin, port, pinNumber, channel, reg_iopwm);
+    return pin;
+}
+
+void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, int reg_iopwm) {
     pin->modeSupported[PIN_MODE_PWM] = true;
     pin->pwm_channel = channel;
     pin->reg_iopwm = reg_iopwm;
@@ -117,77 +141,95 @@ void ioexpander_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, i
     }
 }
 
-void ioexpander_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel) {
-    ioexpander_pin_init(pin, port, pinNumber);
+pin_t *ioe_adc_pin(int port, int pinNumber, int channel) {
+    pin_t *pin = ioe_pin(port, pinNumber);
+    _ioe_adc_pin_init(pin, port, pinNumber, channel);
+    return pin;
+}
+
+void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel) {
     pin->modeSupported[PIN_MODE_ADC] = true;
     pin->adc_channel = channel;
 }
 
 
-void ioexpander_adc_or_pwn_pin_init(pin_t *pin, int port, int pinNumber, int adcChannel, int pwmChannel, int reg_iopwm) {
-    ioexpander_adc_pin_init(pin, port, pinNumber, adcChannel);
-    ioexpander_pwm_pin_init(pin, port, pinNumber, pwmChannel, reg_iopwm);
+pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChannel, int reg_iopwm) {
+    pin_t *pin = ioe_pin(port, pinNumber);
+    _ioe_adc_pin_init(pin, port, pinNumber, adcChannel);
+    _ioe_pwm_pin_init(pin, port, pinNumber, pwmChannel, reg_iopwm);
+    return pin;
 }
 
 ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin, gpio_t gpio, bool skip_chip_id_check) {
-    ioexpander_t *ioe = malloc(sizeof(*ioe)):;
+    ioexpander_t *ioe = malloc(sizeof(*ioe));
+    bzero(ioe, sizeof(*ioe));
     ioe->_i2c_addr = i2c_addr;
-    // ioe->_i2c_dev = SMBus(1);  // TODO: Figure out what this is.
-    ioe->_debug = False;
+#ifdef FIXME
+    ioe->_i2c_dev = SMBus(1);  // TODO: Figure out what this is.
+#endif
+    ioe->_debug = false;
     ioe->_vref = 3.3;
     ioe->_timeout = interrupt_timeout;
     ioe->_interrupt_pin = interrupt_pin;
     ioe->_gpio = gpio;
-    ioe->_encoder_offset = [0, 0, 0, 0];
-    ioe->_encoder_last = [0, 0, 0, 0];
+    // ioe->_encoder_offset = {0, 0, 0, 0};
+    // ioe->_encoder_last = {0, 0, 0, 0};
 
-    if ioe->_interrupt_pin != -1)
+    if (ioe->_interrupt_pin != -1)
+#ifdef FIXME
         if ioe->_gpio is None:
             import RPi.GPIO as GPIO
             ioe->_gpio = GPIO
-        ioe->_gpio.setwarnings(False)
-        ioe->_gpio.setmode(GPIO.BCM)
-        ioe->_gpio.setup(ioe->_interrupt_pin, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
-        ioe->enable_interrupt_out()
+        ioe_setwarnings(ioe->_gpio, false)
+        ioe_setmode(ioe->_gpio, GPIO.BCM)
+        ioe_setup(ioe->_gpio, ioe->_interrupt_pin, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
+        ioe_enable_interrupt_out(ioe)
+#endif
 
-    ioe->_pins = [
-        PWM_PIN(1, 5, 5, REG_PIOCON1),
-        PWM_PIN(1, 0, 2, REG_PIOCON0),
-        PWM_PIN(1, 2, 0, REG_PIOCON0),
-        PWM_PIN(1, 4, 1, REG_PIOCON0),
-        PWM_PIN(0, 0, 3, REG_PIOCON0),
-        PWM_PIN(0, 1, 4, REG_PIOCON0),
-        ADC_OR_PWM_PIN(1, 1, 7, 1, REG_PIOCON0),
-        ADC_OR_PWM_PIN(0, 3, 6, 5, REG_PIOCON0),
-        ADC_OR_PWM_PIN(0, 4, 5, 3, REG_PIOCON1),
-        ADC_PIN(3, 0, 1),
-        ADC_PIN(0, 6, 3),
-        ADC_OR_PWM_PIN(0, 5, 4, 2, REG_PIOCON1),
-        ADC_PIN(0, 7, 2),
-        ADC_PIN(1, 7, 0)
-    ]
+    ioe->_pins[ 0] = ioe_pwm_pin(1, 5, 5, REG_PIOCON1);
+    ioe->_pins[ 1] = ioe_pwm_pin(1, 0, 2, REG_PIOCON0);
+    ioe->_pins[ 2] = ioe_pwm_pin(1, 2, 0, REG_PIOCON0);
+    ioe->_pins[ 3] = ioe_pwm_pin(1, 4, 1, REG_PIOCON0);
+    ioe->_pins[ 4] = ioe_pwm_pin(0, 0, 3, REG_PIOCON0);
+    ioe->_pins[ 5] = ioe_pwm_pin(0, 1, 4, REG_PIOCON0);
+    ioe->_pins[ 6] = ioe_adc_or_pwn_pin(1, 1, 7, 1, REG_PIOCON0);
+    ioe->_pins[ 7] = ioe_adc_or_pwn_pin(0, 3, 6, 5, REG_PIOCON0);
+    ioe->_pins[ 8] = ioe_adc_or_pwn_pin(0, 4, 5, 3, REG_PIOCON1);
+    ioe->_pins[ 9] = ioe_adc_pin(3, 0, 1);
+    ioe->_pins[10] = ioe_adc_pin(0, 6, 3);
+    ioe->_pins[11] = ioe_adc_or_pwn_pin(0, 5, 4, 2, REG_PIOCON1);
+    ioe->_pins[12] = ioe_adc_pin(0, 7, 2);
+    ioe->_pins[13] = ioe_adc_pin(1, 7, 0);
 
-    if not skip_chip_id_check:
-        chip_id = (ioe->i2c_read8(REG_CHIP_ID_H) << 8) | ioe->i2c_read8(REG_CHIP_ID_L)
-        if chip_id != CHIP_ID:
-            raise RuntimeError("Chip ID invalid: {:04x} expected: {:04x}.".format(chip_id, CHIP_ID))
+    if (!skip_chip_id_check) {
+        uint16_t chip_id = (_ioe_i2c_read8(ioe, REG_CHIP_ID_H) << 8) | _ioe_i2c_read8(ioe, REG_CHIP_ID_L);
+        if (chip_id != CHIP_ID) {
+            fprintf(stderr, "Chip ID invalid: %04x expected: %04x.", chip_id, CHIP_ID);
+            exit(1);
+        }
+    }
+    return ioe;
 }
 
-    def i2c_read8(self, reg):
-        """Read a single (8bit) register from the device."""
-        msg_w = i2c_msg.write(ioe->_i2c_addr, [reg])
-        msg_r = i2c_msg.read(ioe->_i2c_addr, 1)
-        ioe->_i2c_dev.i2c_rdwr(msg_w,msg_r)
+#pragma mark - Converted down to here so far.
 
-        return list(msg_r)[0]
+/** Read a single (8bit) register from the device. */
+uint8_t _ioe_i2c_read8(ioexpander_t *ioe, int reg) {
+    msg_w = i2c_msg.write(ioe->_i2c_addr, [reg])
+    msg_r = i2c_msg.read(ioe->_i2c_addr, 1)
+    ioe->_i2c_dev.i2c_rdwr(msg_w,msg_r)
 
-    def i2c_write8(self, reg, value):
-        """Write a single (8bit) register to the device."""
+    return list(msg_r)[0]
+}
+
+/** Write a single (8bit) register to the device. */
+void _ioe_i2c_write8(ioexpander_t *ioe, int reg, uint8_t value) {
         msg_w = i2c_msg.write(ioe->_i2c_addr, [reg, value])
         ioe->_i2c_dev.i2c_rdwr(msg_w)
+}
 
     def setup_rotary_encoder(self, channel, pin_a, pin_b, pin_c=None, count_microsteps=False):
-        """Set up a rotary encoder."""
+        /** Set up a rotary encoder. */
         channel -= 1
         ioe->set_mode(pin_a, PIN_MODE_PU, schmitt_trigger=True)
         ioe->set_mode(pin_b, PIN_MODE_PU, schmitt_trigger=True)
@@ -195,16 +237,16 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
             ioe->set_mode(pin_c, PIN_MODE_OD)
             ioe->output(pin_c, 0)
 
-        ioe->i2c_write8([REG_ENC_1_CFG, REG_ENC_2_CFG, REG_ENC_3_CFG, REG_ENC_4_CFG][channel], pin_a | (pin_b << 4))
+        ioe->_ioe_i2c_write8([REG_ENC_1_CFG, REG_ENC_2_CFG, REG_ENC_3_CFG, REG_ENC_4_CFG][channel], pin_a | (pin_b << 4))
         ioe->change_bit(REG_ENC_EN, channel * 2 + 1, count_microsteps)
         ioe->set_bit(REG_ENC_EN, channel * 2)
 
     def read_rotary_encoder(self, channel):
-        """Read the step count from a rotary encoder."""
+        /** Read the step count from a rotary encoder. */
         channel -= 1
         last = ioe->_encoder_last[channel]
         reg = [REG_ENC_1_COUNT, REG_ENC_2_COUNT, REG_ENC_3_COUNT, REG_ENC_4_COUNT][channel]
-        value = ioe->i2c_read8(reg)
+        value = _ioe_i2c_read8(ioe, reg)
 
         if value & 0b10000000:
             value -= 256
@@ -219,74 +261,74 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         return ioe->_encoder_offset[channel] + value
 
     def set_bits(self, reg, bits):
-        """Set the specified bits (using a mask) in a register."""
+        /** Set the specified bits (using a mask) in a register. */
         if reg in BIT_ADDRESSED_REGS:
             for bit in range(8):
                 if bits & (1 << bit):
-                    ioe->i2c_write8(reg, 0b1000 | (bit & 0b111))
+                    ioe->_ioe_i2c_write8(reg, 0b1000 | (bit & 0b111))
         else:
-            value = ioe->i2c_read8(reg)
+            value = _ioe_i2c_read8(ioe, reg)
             time.sleep(0.001)
-            ioe->i2c_write8(reg, value | bits)
+            ioe->_ioe_i2c_write8(reg, value | bits)
 
     def set_bit(self, reg, bit):
-        """Set the specified bit (nth position from right) in a register."""
+        /** Set the specified bit (nth position from right) in a register. */
         ioe->set_bits(reg, (1 << bit))
 
     def clr_bits(self, reg, bits):
-        """Clear the specified bits (using a mask) in a register."""
+        /** Clear the specified bits (using a mask) in a register. */
         if reg in BIT_ADDRESSED_REGS:
             for bit in range(8):
                 if bits & (1 << bit):
-                    ioe->i2c_write8(reg, 0b0000 | (bit & 0b111))
+                    ioe->_ioe_i2c_write8(reg, 0b0000 | (bit & 0b111))
         else:
-            value = ioe->i2c_read8(reg)
+            value = _ioe_i2c_read8(ioe, reg)
             time.sleep(0.001)
-            ioe->i2c_write8(reg, value & ~bits)
+            ioe->_ioe_i2c_write8(reg, value & ~bits)
 
     def clr_bit(self, reg, bit):
-        """Clear the specified bit (nth position from right) in a register."""
+        /** Clear the specified bit (nth position from right) in a register. */
         ioe->clr_bits(reg, (1 << bit))
 
     def get_bit(self, reg, bit):
-        """Returns the specified bit (nth position from right) from a register."""
-        return ioe->i2c_read8(reg) & (1 << bit)
+        /** Returns the specified bit (nth position from right) from a register. */
+        return _ioe_i2c_read8(ioe, reg) & (1 << bit)
 
     def change_bit(self, reg, bit, state):
-        """Toggle one register bit on/off."""
+        /** Toggle one register bit on/off. */
         if state:
             ioe->set_bit(reg, bit)
         else:
             ioe->clr_bit(reg, bit)
 
-    def enable_interrupt_out(self, pin_swap=False):
-        """Enable the IOE interrupts."""
+    def ioe_enable_interrupt_out(self, pin_swap=False):
+        /** Enable the IOE interrupts. */
         ioe->set_bit(REG_INT, BIT_INT_OUT_EN)
         ioe->change_bit(REG_INT, BIT_INT_PIN_SWAP, pin_swap)
 
-    def disable_interrupt_out(self):
-        """Disable the IOE interrupt output."""
+    def ioe_disable_interrupt_out(self):
+        /** Disable the IOE interrupt output. */
         ioe->clr_bit(REG_INT, BIT_INT_OUT_EN)
 
     def get_interrupt(self):
-        """Get the IOE interrupt state."""
+        /** Get the IOE interrupt state. */
         if ioe->_interrupt_pin is not None:
             return ioe->_gpio.input(ioe->_interrupt_pin) == 0
         else:
             return ioe->get_bit(REG_INT, BIT_INT_TRIGD)
 
     def clear_interrupt(self):
-        """Clear the interrupt flag."""
+        /** Clear the interrupt flag. */
         ioe->clr_bit(REG_INT, BIT_INT_TRIGD)
 
     def set_pin_interrupt(self, pin, enabled):
-        """Enable/disable the input interrupt on a specific pin.
+        /** Enable/disable the input interrupt on a specific pin.
 
         :param pin: Pin from 1-14
         :param enabled: True/False for enabled/disabled
 
-        """
-        if pin < 1 or pin > len(ioe->_pins):
+         */
+        if pin < 1 or pin > sizeof(ioe->_pins / sizeof(ioe->_pins[0])):
             raise ValueError("Pin should be in range 1-14.")
 
         io_pin = ioe->_pins[pin - 1]
@@ -294,16 +336,16 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         ioe->change_bit(io_pin.reg_int_mask_p, io_pin.pin, enabled)
 
     def on_interrupt(self, callback):
-        """Attach an event handler to be run on interrupt.
+        /** Attach an event handler to be run on interrupt.
 
         :param callback: Callback function to run: callback(pin)
 
-        """
+         */
         if ioe->_interrupt_pin is not None:
             ioe->_gpio.add_event_detect(ioe->_interrupt_pin, ioe->_gpio.FALLING, callback=callback, bouncetime=1)
 
     def _wait_for_flash(self):
-        """Wait for the IOE to finish writing non-volatile memory."""
+        /** Wait for the IOE to finish writing non-volatile memory. */
         t_start = time.time()
         while ioe->get_interrupt():
             if time.time() - t_start > ioe->_timeout:
@@ -317,25 +359,25 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
             time.sleep(0.001)
 
     def set_i2c_addr(self, i2c_addr):
-        """Set the IOE i2c address."""
+        /** Set the IOE i2c address. */
         ioe->set_bit(REG_CTRL, 4)
-        ioe->i2c_write8(REG_ADDR, i2c_addr)
+        ioe->_ioe_i2c_write8(REG_ADDR, i2c_addr)
         ioe->_i2c_addr = i2c_addr
         time.sleep(0.25)  // TODO Handle addr change IOError better
         // ioe->_wait_for_flash()
         ioe->clr_bit(REG_CTRL, 4)
 
     def set_adc_vref(self, vref):
-        """Set the ADC voltage reference."""
+        /** Set the ADC voltage reference. */
         ioe->_vref = vref
 
     def get_adc_vref(self):
-        """Get the ADC voltage reference."""
+        /** Get the ADC voltage reference. */
         return ioe->_vref
 
     def get_chip_id(self):
-        """Get the IOE chip ID."""
-        return (ioe->i2c_read8(REG_CHIP_ID_H) << 8) | ioe->i2c_read8(REG_CHIP_ID_L)
+        /** Get the IOE chip ID. */
+        return (_ioe_i2c_read8(ioe, REG_CHIP_ID_H) << 8) | _ioe_i2c_read8(ioe, REG_CHIP_ID_L)
 
     def _pwm_load(self):
         // Load new period and duty registers into buffer
@@ -347,13 +389,13 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
                 raise RuntimeError("Timed out waiting for PWM load!")
 
     def set_pwm_control(self, divider):
-        """Set PWM settings.
+        /** Set PWM settings.
 
         PWM is driven by the 24MHz FSYS clock by default.
 
         :param divider: Clock divider, one of 1, 2, 4, 8, 16, 32, 64 or 128
 
-        """
+         */
         try:
             pwmdiv2 = {
                 1: 0b000,
@@ -373,10 +415,10 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         // PWMTYP - PWM type select: 0 edge-aligned, 1 center-aligned
         // FBINEN - Fault-break input enable
 
-        ioe->i2c_write8(REG_PWMCON1, pwmdiv2)
+        ioe->_ioe_i2c_write8(REG_PWMCON1, pwmdiv2)
 
     def set_pwm_period(self, value):
-        """Set the PWM period.
+        /** Set the PWM period.
 
         The period is the point at which the PWM counter is reset to zero.
 
@@ -384,24 +426,24 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
 
         Also specifies the maximum value that can be set in the PWM duty cycle.
 
-        """
+         */
         value &= 0xffff
-        ioe->i2c_write8(REG_PWMPL, value & 0xff)
-        ioe->i2c_write8(REG_PWMPH, value >> 8)
+        ioe->_ioe_i2c_write8(REG_PWMPL, value & 0xff)
+        ioe->_ioe_i2c_write8(REG_PWMPH, value >> 8)
 
         ioe->_pwm_load()
 
     def get_mode(self, pin):
-        """Get the current mode of a pin."""
+        /** Get the current mode of a pin. */
         return ioe->_pins[pin - 1].mode
 
     def set_mode(self, pin, mode, schmitt_trigger=False, invert=False):
-        """Set a pin output mode.
+        /** Set a pin output mode.
 
         :param mode: one of the supplied IN, OUT, PWM or ADC constants
 
-        """
-        if pin < 1 or pin > len(ioe->_pins):
+         */
+        if pin < 1 or pin > sizeof(ioe->_pins / sizeof(ioe->_pins[0]):
             raise ValueError("Pin should be in range 1-14.")
 
         io_pin = ioe->_pins[pin - 1]
@@ -428,8 +470,8 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
             if PIN_MODE_PWM in io_pin.type:
                 ioe->clr_bit(io_pin.reg_iopwm, io_pin.pwm_channel)
 
-        pm1 = ioe->i2c_read8(io_pin.reg_m1)
-        pm2 = ioe->i2c_read8(io_pin.reg_m2)
+        pm1 = _ioe_i2c_read8(ioe, io_pin.reg_m1)
+        pm2 = _ioe_i2c_read8(ioe, io_pin.reg_m2)
 
         // Clear the pm1 and pm2 bits
         pm1 &= 255 - (1 << io_pin.pin)
@@ -439,18 +481,18 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         pm1 |= (gpio_mode >> 1) << io_pin.pin
         pm2 |= (gpio_mode & 0b1) << io_pin.pin
 
-        ioe->i2c_write8(io_pin.reg_m1, pm1)
-        ioe->i2c_write8(io_pin.reg_m2, pm2)
+        ioe->_ioe_i2c_write8(io_pin.reg_m1, pm1)
+        ioe->_ioe_i2c_write8(io_pin.reg_m2, pm2)
 
         // Set up Schmitt trigger mode on inputs
         if mode in [PIN_MODE_PU, PIN_MODE_IN]:
             ioe->change_bit(io_pin.reg_ps, io_pin.pin, schmitt_trigger)
 
         // 5th bit of mode encodes default output pin state
-        ioe->i2c_write8(io_pin.reg_p, (initial_state << 3) | io_pin.pin)
+        ioe->_ioe_i2c_write8(io_pin.reg_p, (initial_state << 3) | io_pin.pin)
 
     def input(self, pin, adc_timeout=1):
-        """Read the IO pin state.
+        /** Read the IO pin state.
 
         Returns a 12-bit ADC reading if the pin is in ADC mode
         Returns True/False if the pin is in any other input mode
@@ -458,8 +500,8 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
 
         :param adc_timeout: Timeout (in seconds) for an ADC read (default 1.0)
 
-        """
-        if pin < 1 or pin > len(ioe->_pins):
+         */
+        if pin < 1 or pin > sizeof(ioe->_pins / sizeof(ioe->_pins[0]):
             raise ValueError("Pin should be in range 1-14.")
 
         io_pin = ioe->_pins[pin - 1]
@@ -469,7 +511,7 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
                 print("Reading ADC from pin {}".format(pin))
             ioe->clr_bits(REG_ADCCON0, 0x0f)
             ioe->set_bits(REG_ADCCON0, io_pin.adc_channel)
-            ioe->i2c_write8(REG_AINDIDS, 0)
+            ioe->_ioe_i2c_write8(REG_AINDIDS, 0)
             ioe->set_bit(REG_AINDIDS, io_pin.adc_channel)
             ioe->set_bit(REG_ADCCON1, 0)
 
@@ -483,8 +525,8 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
                 if time.time() - t_start >= adc_timeout:
                     raise RuntimeError("Timeout waiting for ADC conversion!")
 
-            hi = ioe->i2c_read8(REG_ADCRH)
-            lo = ioe->i2c_read8(REG_ADCRL)
+            hi = _ioe_i2c_read8(ioe, REG_ADCRH)
+            lo = _ioe_i2c_read8(ioe, REG_ADCRL)
             return ((hi << 4) | lo) / 4095.0 * ioe->_vref
 
         else:
@@ -495,12 +537,12 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
             return HIGH if pv else LOW
 
     def output(self, pin, value):
-        """Write an IO pin state or PWM duty cycle.
+        /** Write an IO pin state or PWM duty cycle.
 
         :param value: Either True/False for OUT, or a number between 0 and PWM period for PWM.
 
-        """
-        if pin < 1 or pin > len(ioe->_pins):
+         */
+        if pin < 1 or pin > sizeof(ioe->_pins / sizeof(ioe->_pins[0]):
             raise ValueError("Pin should be in range 1-14.")
 
         io_pin = ioe->_pins[pin - 1]
@@ -508,8 +550,8 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         if io_pin.mode == PIN_MODE_PWM:
             if ioe->_debug:
                 print("Outputting PWM to pin: {pin}".format(pin=pin))
-            ioe->i2c_write8(io_pin.reg_pwml, value & 0xff)
-            ioe->i2c_write8(io_pin.reg_pwmh, value >> 8)
+            ioe->_ioe_i2c_write8(io_pin.reg_pwml, value & 0xff)
+            ioe->_ioe_i2c_write8(io_pin.reg_pwmh, value >> 8)
             ioe->_pwm_load()
 
         else:

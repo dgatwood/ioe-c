@@ -180,10 +180,6 @@
 #define REG_EIP1 0xbe     // Read only
 #define REG_EIPH1 0xbf    // Read only
 
-#define REG_USER_FLASH 0xd0
-#define REG_FLASH_PAGE 0xf0
-
-
 #define REG_INT 0xf9
 #define MASK_INT_TRIG 0x1
 #define MASK_INT_OUT 0x2
@@ -218,10 +214,10 @@
 #define PIN_MODE_PP      0b00001   // Output, Push-Pull mode
 #define PIN_MODE_IN      0b00010   // Input-only (high-impedance)
 #define PIN_MODE_OD      0b00011   // Output, Open-Drain mode
-#define PIN_MODE_PWM     0b0010 1  // PWM, Output, Push-Pull mode
-#define PIN_MODE_ADC     0b0101 0  // ADC, Input-only (high-impedance)
+#define PIN_MODE_PWM     0b00101   // PWM, Output, Push-Pull mode
+#define PIN_MODE_ADC     0b01010   // ADC, Input-only (high-impedance)
 #define PIN_MODE_PU      0b10000   // Input (with pull-up)
-#define PIN_MODE_INVALID 0b111111  // Must be greater than the highest supported pin mode.
+#define PIN_MODE_INVALID 0b10001   // Must be one greater than the highest supported pin mode.
 
 #define MODE_NAMES ('IO', 'PWM', 'ADC')
 #define GPIO_NAMES ('QB', 'PP', 'IN', 'OD')
