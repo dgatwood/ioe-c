@@ -1,13 +1,48 @@
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <strings.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "constants.h"
 
+#ifdef __linux__
+#include <linux/i2c.h>
+#include <sys/ioctl.h>
+#else
+
+#define I2C_RDWR 42 // Bogus, but just to get the code to compile.
+
+struct i2c_msg {
+  uint16_t addr;
+  uint16_t flags;
+#define I2C_M_TEN		0x0010
+#define I2C_M_RD		0x0001
+#define I2C_M_NOSTART		0x4000
+#define I2C_M_REV_DIR_ADDR	0x2000
+#define I2C_M_IGNORE_NAK	0x1000
+#define I2C_M_NO_RD_ACK		0x0800
+#define I2C_M_RECV_LEN		0x0400
+  uint16_t len;
+  uint8_t *buf;
+};  
+
+struct i2c_rdwr_ioctl_data {
+    struct i2c_msg *msgs;  /* ptr to array of simple messages */
+    int nmsgs;             /* number of messages to exchange */
+};
+
+#endif
+
+#define I2C_FILENAME "/dev/i2c-1"
+
 #undef FIXME
+#undef TEN_BIT_ADDRESS  // ???
 
 typedef struct {
     bool modeSupported[PIN_MODE_INVALID];
@@ -43,6 +78,7 @@ typedef int i2c_dev_t;   // TYPE?
 typedef int gpio_t;      // TYPE?
 
 typedef struct {
+    int fd;
     i2c_addr_t _i2c_addr;
     i2c_dev_t _i2c_dev;
     bool _debug;
@@ -56,11 +92,14 @@ typedef struct {
 } ioexpander_t;
 
 
+// Returns a 16-bit integer to distinguish errors (-1) from legitimate values.
+int16_t _ioe_i2c_read8(ioexpander_t *ioe, uint8_t reg);
 
-uint8_t _ioe_i2c_read8(ioexpander_t *ioe, int reg);
-void _ioe_i2c_write8(ioexpander_t *ioe, int reg, uint8_t value);
+// Returns true on success, else false.
+bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value);
+
 void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel);
-void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, int reg_iopwm);
+void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, uint8_t reg_iopwm);
 
 
 pin_t *ioe_pin(int port, int pinNumber) {
@@ -99,13 +138,13 @@ pin_t *ioe_pin(int port, int pinNumber) {
     return pin;
 }
 
-pin_t *ioe_pwm_pin(int port, int pinNumber, int channel, int reg_iopwm) {
+pin_t *ioe_pwm_pin(int port, int pinNumber, int channel, uint8_t reg_iopwm) {
     pin_t *pin = ioe_pin(port, pinNumber);
     _ioe_pwm_pin_init(pin, port, pinNumber, channel, reg_iopwm);
     return pin;
 }
 
-void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, int reg_iopwm) {
+void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, uint8_t reg_iopwm) {
     pin->modeSupported[PIN_MODE_PWM] = true;
     pin->pwm_channel = channel;
     pin->reg_iopwm = reg_iopwm;
@@ -153,7 +192,7 @@ void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel) {
 }
 
 
-pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChannel, int reg_iopwm) {
+pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChannel, uint8_t reg_iopwm) {
     pin_t *pin = ioe_pin(port, pinNumber);
     _ioe_adc_pin_init(pin, port, pinNumber, adcChannel);
     _ioe_pwm_pin_init(pin, port, pinNumber, pwmChannel, reg_iopwm);
@@ -161,8 +200,14 @@ pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChanne
 }
 
 ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin, gpio_t gpio, bool skip_chip_id_check) {
+    int fd = -1;
+    if ((fd = open(I2C_FILENAME, O_RDWR)) < 0) {
+        fprintf(stderr, "Could not open I2C bus.  Bailing.\n");
+        exit(1);
+    }
     ioexpander_t *ioe = malloc(sizeof(*ioe));
     bzero(ioe, sizeof(*ioe));
+    ioe->fd = fd;
     ioe->_i2c_addr = i2c_addr;
 #ifdef FIXME
     ioe->_i2c_dev = SMBus(1);  // TODO: Figure out what this is.
@@ -211,22 +256,89 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
     return ioe;
 }
 
+void freeIOExpander(ioexpander_t *ioe) {
+    close(ioe->fd);
+    for (int i = 0; i < 13; i++) {
+        free(ioe->_pins[i]);
+    }
+    free(ioe);
+}
+
+/** Read a single (8-bit) register from the device. */
+int16_t _ioe_i2c_read8(ioexpander_t *ioe, uint8_t reg) {
+    struct i2c_msg messages[2];
+    struct i2c_msg *writeMessage = &messages[0];
+    struct i2c_msg *readMessage = &messages[1];
+    struct i2c_rdwr_ioctl_data readWriteData;
+    readWriteData.msgs = messages;
+    readWriteData.nmsgs = 2;
+
+    writeMessage->addr = ioe->_i2c_addr;
+    writeMessage->flags =
+#ifdef TEN_BIT_ADDRESS
+	I2C_M_TEN |
+#endif
+        0;
+    writeMessage->len = 1;
+    uint8_t registerBuf = reg;
+    writeMessage->buf = &registerBuf;
+
+    readMessage->addr = ioe->_i2c_addr;
+    readMessage->flags =
+#ifdef TEN_BIT_ADDRESS
+	I2C_M_TEN |
+#endif
+        I2C_M_RD;
+    readMessage->len = 1;
+    uint8_t valueRead = 0;
+    readMessage->buf = &valueRead;
+
+    int result = 0;
+    do {
+        result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
+    } while (result != EINTR);
+
+    if (result < 0) {
+        perror("ioctl(I2C_RDWR) in i2c_read");
+        return -1;
+    }
+
+    return valueRead;
+}
+
+/** Write a single (8-bit) register to the device. */
+bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
+    struct i2c_msg writeMessage;
+    struct i2c_rdwr_ioctl_data readWriteData;
+    readWriteData.msgs = &writeMessage;
+    readWriteData.nmsgs = 1;
+
+    writeMessage.addr = ioe->_i2c_addr;
+    writeMessage.flags =
+#ifdef TEN_BIT_ADDRESS
+	I2C_M_TEN |
+#endif
+        0;
+    writeMessage.len = 2;
+    uint8_t registerBuf[2];
+    registerBuf[0] = reg;
+    registerBuf[1] = value;
+    writeMessage.buf = registerBuf;
+
+    int result = 0;
+    do {
+        result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
+    } while (result != EINTR);
+
+    if (result < 0) {
+        perror("ioctl(I2C_RDWR) in i2c_read");
+        return false;
+    }
+
+    return true;
+}
+
 #pragma mark - Converted down to here so far.
-
-/** Read a single (8bit) register from the device. */
-uint8_t _ioe_i2c_read8(ioexpander_t *ioe, int reg) {
-    msg_w = i2c_msg.write(ioe->_i2c_addr, [reg])
-    msg_r = i2c_msg.read(ioe->_i2c_addr, 1)
-    ioe->_i2c_dev.i2c_rdwr(msg_w,msg_r)
-
-    return list(msg_r)[0]
-}
-
-/** Write a single (8bit) register to the device. */
-void _ioe_i2c_write8(ioexpander_t *ioe, int reg, uint8_t value) {
-        msg_w = i2c_msg.write(ioe->_i2c_addr, [reg, value])
-        ioe->_i2c_dev.i2c_rdwr(msg_w)
-}
 
     def setup_rotary_encoder(self, channel, pin_a, pin_b, pin_c=None, count_microsteps=False):
         /** Set up a rotary encoder. */
