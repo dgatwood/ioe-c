@@ -306,7 +306,7 @@ int16_t _ioe_i2c_read8(ioexpander_t *ioe, uint8_t reg) {
     int result = 0;
     do {
         result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
-    } while (result == EINTR);
+    } while (result < 0 && errno == EINTR);
 
     if (result < 0) {
         perror("ioctl(I2C_RDWR) in i2c_read");
@@ -338,7 +338,7 @@ bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
     int result = 0;
     do {
         result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
-    } while (result == EINTR);
+    } while (result < 0 && errno == EINTR);
 
     if (result < 0) {
         perror("ioctl(I2C_RDWR) in i2c_read");
