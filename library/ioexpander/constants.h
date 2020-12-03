@@ -222,9 +222,9 @@ inline bool isBitAddressedReg(uint8_t reg) {
 #define PIN_MODE_PU      0b10000   // Input (with pull-up)
 #define PIN_MODE_INVALID 0b10001   // Must be one greater than the highest supported pin mode.
 
-static char *MODE_NAMES[] = {"IO", "PWM", "ADC"};
-static char *GPIO_NAMES[] = {"QB", "PP", "IN", "OD"};
-static char *STATE_NAMES[] = {"LOW", "HIGH"};
+static const char *MODE_NAMES[] = {"IO", "PWM", "ADC"};
+static const char *GPIO_NAMES[] = {"QB", "PP", "IN", "OD"};
+static const char *STATE_NAMES[] = {"LOW", "HIGH"};
 
 #define IN PIN_MODE_IN
 #define IN_PULL_UP PIN_MODE_PU

@@ -111,7 +111,7 @@ double _ioe_fractime(void);
 
 
 pin_t *ioe_pin(int port, int pinNumber) {
-    pin_t *pin = malloc(sizeof(*pin));
+    pin_t *pin = (pin_t *)malloc(sizeof(*pin));
     pin->modeSupported[PIN_MODE_IO] = true;
     pin->mode = PIN_MODE_INVALID;
     pin->port = port;
@@ -207,13 +207,13 @@ pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChanne
     return pin;
 }
 
-ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin /* or -1 */, bool interrupts_enabled, gpio_t gpio, bool skip_chip_id_check) {
+ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin /* or -1 */, gpio_t gpio, bool skip_chip_id_check) {
     int fd = -1;
     if ((fd = open(I2C_FILENAME, O_RDWR)) < 0) {
         fprintf(stderr, "Could not open I2C bus.  Bailing.\n");
         exit(1);
     }
-    ioexpander_t *ioe = malloc(sizeof(*ioe));
+    ioexpander_t *ioe = (ioexpander_t *)malloc(sizeof(*ioe));
     bzero(ioe, sizeof(*ioe));
     ioe->fd = fd;
     ioe->_i2c_addr = i2c_addr;
