@@ -1,4 +1,4 @@
-#define VERSION '0.0.1'
+#define VERSION "0.0.1"
 
 #define I2C_ADDR 0x18
 #define CHIP_ID 0xE26A
@@ -204,7 +204,10 @@
 
 // Special mode registers, use a bit-addressing scheme to avoid
 // writing the *whole* port and smashing the i2c pins
-#define BIT_ADDRESSED_REGS [REG_P0, REG_P1, REG_P2, REG_P3]
+inline bool isBitAddressedReg(uint8_t reg) {
+  // 0x40, 0x50, 0x60, 0x70  -> 0b01xx0000
+  return ((reg & 0b11001111) == 0b01000000);
+}
 
 // These values encode our desired pin function: IO, ADC, PWM
 // alongwide the GPIO MODE for that port and pin (section 8.1)
@@ -219,9 +222,9 @@
 #define PIN_MODE_PU      0b10000   // Input (with pull-up)
 #define PIN_MODE_INVALID 0b10001   // Must be one greater than the highest supported pin mode.
 
-#define MODE_NAMES ('IO', 'PWM', 'ADC')
-#define GPIO_NAMES ('QB', 'PP', 'IN', 'OD')
-#define STATE_NAMES ('LOW', 'HIGH')
+static char *MODE_NAMES[] = {"IO", "PWM", "ADC"};
+static char *GPIO_NAMES[] = {"QB", "PP", "IN", "OD"};
+static char *STATE_NAMES[] = {"LOW", "HIGH"};
 
 #define IN PIN_MODE_IN
 #define IN_PULL_UP PIN_MODE_PU
