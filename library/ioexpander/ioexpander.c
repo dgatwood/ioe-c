@@ -654,14 +654,14 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
     int io_mode = (mode >> 2) & 0b11;
     int initial_state = mode >> 4;
 
-    if (io_mode != PIN_MODE_IO && !io_pin->modeSupported[io_mode]) {
-        fprintf(stderr,"Pin %d does not support %s!", pinNumber, MODE_NAMES[io_mode]);
+    if (io_mode != PIN_MODE_IO && !io_pin->modeSupported[mode]) {
+        fprintf(stderr,"Pin %d does not support %s!", pinNumber, MODE_NAMES[mode]);
         exit(1);
     }
 
     io_pin->mode = mode;
     if (ioe->_debug) {
-        printf("Setting pin %d to mode %s %s, state: %s", pinNumber, MODE_NAMES[io_mode], GPIO_NAMES[gpio_mode], STATE_NAMES[initial_state]);
+        printf("Setting pin %d to mode %d %s %s, state: %s", pinNumber, io_mode, MODE_NAMES[io_mode], GPIO_NAMES[gpio_mode], STATE_NAMES[initial_state]);
     }
 
     if (mode == PIN_MODE_PWM) {
