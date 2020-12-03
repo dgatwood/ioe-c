@@ -75,7 +75,7 @@ typedef struct {
     uint8_t reg_pwmh;
 } pin_t;
 
-typedef uintptr_t i2c_addr_t;  // TYPE?
+typedef uint8_t i2c_addr_t;  // default 0x20; values from 0x20 - 0x27
 typedef int i2c_dev_t;   // TYPE?
 typedef int gpio_t;      // TYPE?
 
