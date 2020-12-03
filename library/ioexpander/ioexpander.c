@@ -211,7 +211,7 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
     int fd = -1;
     if ((fd = open(I2C_FILENAME, O_RDWR)) < 0) {
         fprintf(stderr, "Could not open I2C bus.  Bailing.\n");
-        exit(1);
+        return NULL;
     }
     ioexpander_t *ioe = (ioexpander_t *)malloc(sizeof(*ioe));
     bzero(ioe, sizeof(*ioe));
@@ -241,20 +241,20 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
 #endif
     }
 
-    ioe->_pins[ 0] = ioe_pwm_pin(1, 5, 5, REG_PIOCON1);
-    ioe->_pins[ 1] = ioe_pwm_pin(1, 0, 2, REG_PIOCON0);
-    ioe->_pins[ 2] = ioe_pwm_pin(1, 2, 0, REG_PIOCON0);
-    ioe->_pins[ 3] = ioe_pwm_pin(1, 4, 1, REG_PIOCON0);
-    ioe->_pins[ 4] = ioe_pwm_pin(0, 0, 3, REG_PIOCON0);
-    ioe->_pins[ 5] = ioe_pwm_pin(0, 1, 4, REG_PIOCON0);
-    ioe->_pins[ 6] = ioe_adc_or_pwn_pin(1, 1, 7, 1, REG_PIOCON0);
-    ioe->_pins[ 7] = ioe_adc_or_pwn_pin(0, 3, 6, 5, REG_PIOCON0);
-    ioe->_pins[ 8] = ioe_adc_or_pwn_pin(0, 4, 5, 3, REG_PIOCON1);
-    ioe->_pins[ 9] = ioe_adc_pin(3, 0, 1);
-    ioe->_pins[10] = ioe_adc_pin(0, 6, 3);
-    ioe->_pins[11] = ioe_adc_or_pwn_pin(0, 5, 4, 2, REG_PIOCON1);
-    ioe->_pins[12] = ioe_adc_pin(0, 7, 2);
-    ioe->_pins[13] = ioe_adc_pin(1, 7, 0);
+    ioe->_pins[ 0] = ioe_pwm_pin(1, 5, 5, REG_PIOCON1);            //  1
+    ioe->_pins[ 1] = ioe_pwm_pin(1, 0, 2, REG_PIOCON0);            //  2
+    ioe->_pins[ 2] = ioe_pwm_pin(1, 2, 0, REG_PIOCON0);            //  3
+    ioe->_pins[ 3] = ioe_pwm_pin(1, 4, 1, REG_PIOCON0);            //  4
+    ioe->_pins[ 4] = ioe_pwm_pin(0, 0, 3, REG_PIOCON0);            //  5
+    ioe->_pins[ 5] = ioe_pwm_pin(0, 1, 4, REG_PIOCON0);            //  6
+    ioe->_pins[ 6] = ioe_adc_or_pwn_pin(1, 1, 7, 1, REG_PIOCON0);  //  7
+    ioe->_pins[ 7] = ioe_adc_or_pwn_pin(0, 3, 6, 5, REG_PIOCON0);  //  8
+    ioe->_pins[ 8] = ioe_adc_or_pwn_pin(0, 4, 5, 3, REG_PIOCON1);  //  9
+    ioe->_pins[ 9] = ioe_adc_pin(3, 0, 1);                         // 10
+    ioe->_pins[10] = ioe_adc_pin(0, 6, 3);                         // 11
+    ioe->_pins[11] = ioe_adc_or_pwn_pin(0, 5, 4, 2, REG_PIOCON1);  // 12
+    ioe->_pins[12] = ioe_adc_pin(0, 7, 2);                         // 13
+    ioe->_pins[13] = ioe_adc_pin(1, 7, 0);                         // 14
 
     if (!skip_chip_id_check) {
         uint16_t chip_id = (_ioe_i2c_read8(ioe, REG_CHIP_ID_H) << 8) | _ioe_i2c_read8(ioe, REG_CHIP_ID_L);
@@ -306,7 +306,7 @@ int16_t _ioe_i2c_read8(ioexpander_t *ioe, uint8_t reg) {
     int result = 0;
     do {
         result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
-    } while (result != EINTR);
+    } while (result == EINTR);
 
     if (result < 0) {
         perror("ioctl(I2C_RDWR) in i2c_read");
@@ -338,7 +338,7 @@ bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
     int result = 0;
     do {
         result = ioctl(ioe->fd, I2C_RDWR, &readWriteData);
-    } while (result != EINTR);
+    } while (result == EINTR);
 
     if (result < 0) {
         perror("ioctl(I2C_RDWR) in i2c_read");
