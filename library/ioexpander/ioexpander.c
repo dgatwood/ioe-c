@@ -260,7 +260,7 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
         uint16_t chip_id = (_ioe_i2c_read8(ioe, REG_CHIP_ID_H) << 8) | _ioe_i2c_read8(ioe, REG_CHIP_ID_L);
         if (chip_id != CHIP_ID) {
             fprintf(stderr, "Chip ID invalid: %04x expected: %04x.", chip_id, CHIP_ID);
-            exit(1);
+            return NULL;
         }
     }
     return ioe;
