@@ -1,0 +1,11 @@
+This is a really quick, really crude port of the library for this chipset to C.
+Support for interrupts is #ifdef'ed out because it requires integrating some
+additional library code for accessing GPIO pins, and I didn't need it for my
+project.
+
+I have made no attempts to port any of the examples, and most of the functionality
+is entirely untested.
+
+The code itself is in library/ioexpander/ and lives alongside the original
+python code for reference.
+
