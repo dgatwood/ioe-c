@@ -200,7 +200,7 @@ void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel) {
 }
 
 
-pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChannel, uint8_t reg_iopwm) {
+pin_t *ioe_adc_or_pwm_pin(int port, int pinNumber, int adcChannel, int pwmChannel, uint8_t reg_iopwm) {
     pin_t *pin = ioe_pin(port, pinNumber);
     _ioe_adc_pin_init(pin, port, pinNumber, adcChannel);
     _ioe_pwm_pin_init(pin, port, pinNumber, pwmChannel, reg_iopwm);
@@ -247,12 +247,12 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
     ioe->_pins[ 3] = ioe_pwm_pin(1, 4, 1, REG_PIOCON0);            //  4
     ioe->_pins[ 4] = ioe_pwm_pin(0, 0, 3, REG_PIOCON0);            //  5
     ioe->_pins[ 5] = ioe_pwm_pin(0, 1, 4, REG_PIOCON0);            //  6
-    ioe->_pins[ 6] = ioe_adc_or_pwn_pin(1, 1, 7, 1, REG_PIOCON0);  //  7
-    ioe->_pins[ 7] = ioe_adc_or_pwn_pin(0, 3, 6, 5, REG_PIOCON0);  //  8
-    ioe->_pins[ 8] = ioe_adc_or_pwn_pin(0, 4, 5, 3, REG_PIOCON1);  //  9
+    ioe->_pins[ 6] = ioe_adc_or_pwm_pin(1, 1, 7, 1, REG_PIOCON0);  //  7
+    ioe->_pins[ 7] = ioe_adc_or_pwm_pin(0, 3, 6, 5, REG_PIOCON0);  //  8
+    ioe->_pins[ 8] = ioe_adc_or_pwm_pin(0, 4, 5, 3, REG_PIOCON1);  //  9
     ioe->_pins[ 9] = ioe_adc_pin(3, 0, 1);                         // 10
     ioe->_pins[10] = ioe_adc_pin(0, 6, 3);                         // 11
-    ioe->_pins[11] = ioe_adc_or_pwn_pin(0, 5, 4, 2, REG_PIOCON1);  // 12
+    ioe->_pins[11] = ioe_adc_or_pwm_pin(0, 5, 4, 2, REG_PIOCON1);  // 12
     ioe->_pins[12] = ioe_adc_pin(0, 7, 2);                         // 13
     ioe->_pins[13] = ioe_adc_pin(1, 7, 0);                         // 14
 
