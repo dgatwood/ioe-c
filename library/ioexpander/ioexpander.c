@@ -256,10 +256,20 @@ ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int i
     ioe->_pins[12] = ioe_adc_pin(0, 7, 2);                         // 13
     ioe->_pins[13] = ioe_adc_pin(1, 7, 0);                         // 14
 
+    // Pin 13 is on pin 10
+    // Pin 12 is on pin 13
+
+    // 070 reads junk
+    // 071 reads pin 13
+    // 072 reads junk
+    // 073 reads junk
+    // 074 reads junk
+    // 075 reads junk
+
     if (!skip_chip_id_check) {
         uint16_t chip_id = (_ioe_i2c_read8(ioe, REG_CHIP_ID_H) << 8) | _ioe_i2c_read8(ioe, REG_CHIP_ID_L);
         if (chip_id != CHIP_ID) {
-            fprintf(stderr, "Chip ID invalid: %04x expected: %04x.", chip_id, CHIP_ID);
+            fprintf(stderr, "Chip ID invalid: %04x expected: %04x.\n", chip_id, CHIP_ID);
             return NULL;
         }
     }
@@ -309,10 +319,13 @@ int16_t _ioe_i2c_read8(ioexpander_t *ioe, uint8_t reg) {
     } while (result < 0 && errno == EINTR);
 
     if (result < 0) {
-        perror("ioctl(I2C_RDWR) in i2c_read");
+        perror("ioctl(I2C_RDWR) in _ioe_i2c_read8");
         return -1;
     }
 
+    if (ioe->_debug) {
+        fprintf(stderr, "i2c_read8(reg=%d): %d\n", reg, valueRead);
+    }
     return valueRead;
 }
 
@@ -322,6 +335,10 @@ bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
     struct i2c_rdwr_ioctl_data readWriteData;
     readWriteData.msgs = &writeMessage;
     readWriteData.nmsgs = 1;
+
+    if (ioe->_debug) {
+        fprintf(stderr, "i2c_write8(reg=%d, value=%d)\n", reg, value);
+    }
 
     writeMessage.addr = ioe->_i2c_addr;
     writeMessage.flags =
@@ -341,7 +358,7 @@ bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
     } while (result < 0 && errno == EINTR);
 
     if (result < 0) {
-        perror("ioctl(I2C_RDWR) in i2c_read");
+        perror("ioctl(I2C_RDWR) in _ioe_i2c_write8");
         return false;
     }
 
@@ -404,8 +421,6 @@ int read_rotary_encoder(ioexpander_t *ioe, int channel) {
     return ioe->_encoder_offset[channel - 1] + value;
 }
 
-#pragma mark - Converted down to here so far.  Partially converted the code after this.
-
 /** Set the specified bits (using a mask) in a register. */
 void _ioe_set_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
     if (isBitAddressedReg(reg)) {  // What is this?
@@ -460,6 +475,11 @@ void _ioe_change_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit, bool state) {
     }
 }
 
+#ifdef FIXME
+// I did not add interrupt support for what I'm doing, and it requires integrating an external
+// library, so it wasn't worth the effort.  If somebody needs interrupt support, feel free to
+// use libgpiod or similar to flesh out these functions.
+
 /** Enable the IOE interrupts. */
 void ioe_enable_interrupt_out(ioexpander_t *ioe, bool pin_swap /* false */) {
     _ioe_set_bit(ioe, REG_INT, BIT_INT_OUT_EN);
@@ -470,11 +490,6 @@ void ioe_enable_interrupt_out(ioexpander_t *ioe, bool pin_swap /* false */) {
 void ioe_disable_interrupt_out(ioexpander_t *ioe) {
     _ioe_clr_bit(ioe, REG_INT, BIT_INT_OUT_EN);
 }
-
-#ifdef FIXME
-// I did not add interrupt support for what I'm doing, and it requires integrating an external
-// library, so it wasn't worth the effort.  If somebody needs interrupt support, feel free to
-// use libgpiod or similar to flesh out these functions.
 
 bool get_gpio_pin_value(int pinNumber) {
     return true;
@@ -502,7 +517,7 @@ void clear_interrupt(ioexpander_t *ioe) {
  */
 void set_pin_interrupt(ioexpander_t *ioe, pin_t *pin, bool enabled) {
     if (pin < 1 || pin > (sizeof(ioe->_pins) / sizeof(ioe->_pins[0])) {
-        fprintf(stderr, "Pin should be in range 1-14.");
+        fprintf(stderr, "Pin should be in range 1-14.\n");
         exit(1);
     }
 
@@ -526,7 +541,7 @@ void _ioe_wait_for_flash(ioexpander_t *ioe) {
     double t_start = _ioe_fractime();
     while (_ioe_get_interrupt(ioe) {
         if (_ioe_fractime() - t_start > ioe->_timeout) {
-            fprintf(stderr, "Timed out waiting for interrupt!");
+            fprintf(stderr, "Timed out waiting for interrupt!\n");
             exit(1);
         }
         usleep(1000);
@@ -535,13 +550,12 @@ void _ioe_wait_for_flash(ioexpander_t *ioe) {
     t_start = _ioe_fractime();
     while (! _ioe_get_interrupt(ioe) {
         if (_ioe_fractime() - t_start > ioe->_timeout) {
-            fprintf(stderr, "Timed out waiting for interrupt!");
+            fprintf(stderr, "Timed out waiting for interrupt!\n");
             exit(1);
         }
         usleep(1000);
     }
 }
-#endif
 
 /** Set the IOE i2c address. */
 void set_i2c_addr(ioexpander_t *ioe, i2c_addr_t i2c_addr) {
@@ -552,6 +566,8 @@ void set_i2c_addr(ioexpander_t *ioe, i2c_addr_t i2c_addr) {
     // _ioe_wait_for_flash(ioe);
     _ioe_clr_bit(ioe, REG_CTRL, 4);
 }
+
+#endif
 
 /** Set the ADC voltage reference. */
 void set_adc_vref(ioexpander_t *ioe, double vref) {
@@ -575,7 +591,7 @@ void _ioe_pwm_load(ioexpander_t *ioe) {
     while (_ioe_get_bit(ioe, REG_PWMCON0, 6)) {
         usleep(1000);           // Wait for "LOAD" to complete
         if (_ioe_fractime() - t_start >= ioe->_timeout) {
-            fprintf(stderr, "Timed out waiting for PWM load!");
+            fprintf(stderr, "Timed out waiting for PWM load!\n");
             exit(1);
         }
     }
@@ -587,20 +603,19 @@ void _ioe_pwm_load(ioexpander_t *ioe) {
  * @param divider Clock divider, one of 1, 2, 4, 8, 16, 32, 64 or 128
 */
 void set_pwm_control(ioexpander_t *ioe, int divider) {
-#ifdef FIXME
-    try {
-        pwmdiv2 = {
-            1: 0b000,
-            2: 0b001,
-            4: 0b010,
-            8: 0b011,
-            16: 0b100,
-            32: 0b101,
-            64: 0b110,
-            128: 0b111}[divider]
-    except KeyError:
-        fprintf(stderr, "A clock divider of %d", divider);
-        exit(1);
+    uint8_t pwmdiv2 = 0;
+    switch(divider) {
+        case 1: pwmdiv2 = 0b000; break;
+        case 2: pwmdiv2 = 0b001; break;
+        case 4: pwmdiv2 = 0b010; break;
+        case 8: pwmdiv2 = 0b011; break;
+        case 16: pwmdiv2 = 0b100; break;
+        case 32: pwmdiv2 = 0b101; break;
+        case 64: pwmdiv2 = 0b110; break;
+        case 128: pwmdiv2 = 0b111; break;
+        default:
+            fprintf(stderr, "Invalid clock divider %d\n", divider);
+            exit(1);
     }
 
     // TODO: This currently sets GP, PWMTYP and FBINEN to 0
@@ -610,7 +625,6 @@ void set_pwm_control(ioexpander_t *ioe, int divider) {
     // FBINEN - Fault-break input enable
 
     _ioe_i2c_write8(ioe, REG_PWMCON1, pwmdiv2);
-#endif
 }
 
 /**
@@ -655,13 +669,13 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
     int initial_state = mode >> 4;
 
     if (io_mode != PIN_MODE_IO && !io_pin->modeSupported[mode]) {
-        fprintf(stderr,"Pin %d does not support %s!", pinNumber, MODE_NAMES[mode]);
+        fprintf(stderr,"Pin %d does not support %s!\n", pinNumber, MODE_NAMES[io_mode]);
         exit(1);
     }
 
     io_pin->mode = mode;
     if (ioe->_debug) {
-        printf("Setting pin %d to mode %d %s %s, state: %s", pinNumber, io_mode, MODE_NAMES[io_mode], GPIO_NAMES[gpio_mode], STATE_NAMES[initial_state]);
+        printf("Setting pin %d to mode %d %s %s, state: %s\n", pinNumber, io_mode, MODE_NAMES[io_mode], GPIO_NAMES[gpio_mode], STATE_NAMES[initial_state]);
     }
 
     if (mode == PIN_MODE_PWM) {
@@ -670,6 +684,9 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
         _ioe_set_bit(ioe, REG_PWMCON0, 7);  // Set PWMRUN bit;
     } else {
         if (io_pin->modeSupported[PIN_MODE_PWM]) {
+            if (ioe->_debug) {
+                fprintf(stderr, "Disabling PWM on pin %d\n", pinNumber);
+            }
             _ioe_clr_bit(ioe, io_pin->reg_iopwm, io_pin->pwm_channel);
         }
     }
@@ -707,18 +724,22 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
 */
 int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
     if (pinNumber < 1 || pinNumber > (sizeof(ioe->_pins) / sizeof(ioe->_pins[0]))) {
-        fprintf(stderr, "Pin should be in range 1-14.");
+        fprintf(stderr, "Pin should be in range 1-14.\n");
         exit(1);
     }
-
     pin_t *io_pin = ioe->_pins[pinNumber - 1];
+
+    if (ioe->_debug) {
+        fprintf(stderr, "Read pin %d channel %d\n", pinNumber, io_pin->adc_channel);
+    }
 
     if (io_pin->mode == PIN_MODE_ADC) {
         if (ioe->_debug) {
-            printf("Reading ADC from pin %d", pinNumber);
+            printf("Reading ADC from pin %d\n", pinNumber);
+            printf("ADC Channel: %d\n", io_pin->adc_channel);
         }
         _ioe_clr_bits(ioe, REG_ADCCON0, 0x0f);
-        _ioe_set_bit(ioe, REG_ADCCON0, io_pin->adc_channel);
+        _ioe_set_bits(ioe, REG_ADCCON0, io_pin->adc_channel);
         _ioe_i2c_write8(ioe, REG_AINDIDS, 0);
         _ioe_set_bit(ioe, REG_AINDIDS, io_pin->adc_channel);
         _ioe_set_bit(ioe, REG_ADCCON1, 0);
@@ -731,17 +752,21 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
         while (!_ioe_get_bit(ioe, REG_ADCCON0, 7)) {
             usleep(10000);
             if (_ioe_fractime() - t_start >= adc_timeout) {
-                fprintf(stderr, "Timeout waiting for ADC conversion!");
+                fprintf(stderr, "Timeout waiting for ADC conversion!\n");
                 exit(1);
             }
         }
 
         uint8_t hi = _ioe_i2c_read8(ioe, REG_ADCRH);
         uint8_t lo = _ioe_i2c_read8(ioe, REG_ADCRL);
-        return ((hi << 4) | lo) / 4095.0 * ioe->_vref;
+        if (ioe->_debug) {
+            fprintf(stderr, "Hi: %d lo: %d computed: %d\n", hi, lo, ((hi << 4) | lo));
+        }
+        return (((int)hi << 4) | lo); // Original Python code was this value / 4095.0 * ioe->_vref,
+                                 // but we need to represent it as an integer from 0..4095.
     } else {
         if (ioe->_debug) {
-            printf("Reading IO from pin %d", pinNumber);
+            printf("Reading IO from pin %d\n", pinNumber);
         }
         bool pv = _ioe_get_bit(ioe, io_pin->reg_p, io_pin->pinNumber);
 
@@ -756,7 +781,7 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
  */
 void _ioe_output(ioexpander_t *ioe, int pinNumber, uint32_t value) {
     if (pinNumber < 1 || pinNumber > (sizeof(ioe->_pins) / sizeof(ioe->_pins[0]))) {
-        fprintf(stderr, "Pin should be in range 1-14.");
+        fprintf(stderr, "Pin should be in range 1-14.\n");
         exit(1);
     }
 
@@ -764,7 +789,7 @@ void _ioe_output(ioexpander_t *ioe, int pinNumber, uint32_t value) {
 
     if (io_pin->mode == PIN_MODE_PWM) {
         if (ioe->_debug) {
-            printf("Outputting PWM to pin: %d", pinNumber);
+            printf("Outputting PWM to pin: %d\n", pinNumber);
         }
         _ioe_i2c_write8(ioe, io_pin->reg_pwml, value & 0xff);
         _ioe_i2c_write8(ioe, io_pin->reg_pwmh, value >> 8);
@@ -772,12 +797,12 @@ void _ioe_output(ioexpander_t *ioe, int pinNumber, uint32_t value) {
     } else {
         if (value == LOW) {
             if (ioe->_debug) {
-                printf("Outputting LOW to pin: %d", pinNumber);
+                printf("Outputting LOW to pin: %d\n", pinNumber);
             }
             _ioe_clr_bit(ioe, io_pin->reg_p, io_pin->pinNumber);
         } else if (value == HIGH) {
             if (ioe->_debug) {
-                printf("Outputting HIGH to pin: %d", pinNumber);
+                printf("Outputting HIGH to pin: %d\n", pinNumber);
             }
             _ioe_set_bit(ioe, io_pin->reg_p, io_pin->pinNumber);
         }

@@ -640,6 +640,7 @@ class IOE():
         if io_pin.mode == PIN_MODE_ADC:
             if self._debug:
                 print("Reading ADC from pin {}".format(pin))
+                print("ADC channel {}".format(io_pin.adc_channel))
             self.clr_bits(REG_ADCCON0, 0x0f)
             self.set_bits(REG_ADCCON0, io_pin.adc_channel)
             self.i2c_write8(REG_AINDIDS, 0)
