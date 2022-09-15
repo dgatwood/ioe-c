@@ -207,9 +207,9 @@ pin_t *ioe_adc_or_pwn_pin(int port, int pinNumber, int adcChannel, int pwmChanne
     return pin;
 }
 
-ioexpander_t *newIOExpander(i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin /* or -1 */, gpio_t gpio, bool skip_chip_id_check) {
+ioexpander_t *newIOExpander(const char *i2cFilename, i2c_addr_t i2c_addr, double interrupt_timeout, int interrupt_pin /* or -1 */, gpio_t gpio, bool skip_chip_id_check) {
     int fd = -1;
-    if ((fd = open(I2C_FILENAME, O_RDWR)) < 0) {
+    if ((fd = open(i2cFilename ?: I2C_FILENAME, O_RDWR)) < 0) {
         fprintf(stderr, "Could not open I2C bus.  Bailing.\n");
         return NULL;
     }
