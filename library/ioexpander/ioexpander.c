@@ -492,6 +492,9 @@ void ioe_disable_interrupt_out(ioexpander_t *ioe) {
 }
 
 bool get_gpio_pin_value(int pinNumber) {
+#ifdef FIXME
+    // Do something here.
+#endif
     return true;
 }
 
