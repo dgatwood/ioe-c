@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import time
 import colorsys
-import ioexpander as io
+import time
 
+import ioexpander as io
 
 print("""pwm.py
 
@@ -41,4 +41,3 @@ while True:
     ioe.output(PIN_BLUE, b)
 
     time.sleep(1.0 / 30)
-
