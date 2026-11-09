@@ -761,8 +761,11 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
             }
         }
 
-        uint8_t hi = _ioe_i2c_read8(ioe, REG_ADCRH);
-        uint8_t lo = _ioe_i2c_read8(ioe, REG_ADCRL);
+        int16_t hi = _ioe_i2c_read8(ioe, REG_ADCRH);
+        int16_t lo = _ioe_i2c_read8(ioe, REG_ADCRL);
+        if (hi < 0 || lo < 0) {
+            return -1;
+        }
         if (ioe->_debug) {
             fprintf(stderr, "Hi: %d lo: %d computed: %d\n", hi, lo, ((hi << 4) | lo));
         }
@@ -772,7 +775,11 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
         if (ioe->_debug) {
             printf("Reading IO from pin %d\n", pinNumber);
         }
-        bool pv = _ioe_get_bit(ioe, io_pin->reg_p, io_pin->pinNumber);
+        int16_t regval = _ioe_i2c_read8(ioe, io_pin->reg_p);
+        if (regval < 0) {
+            return -1;
+        }
+        bool pv = (regval & (1 << io_pin->pinNumber)) != 0;
 
         return pv ? HIGH : LOW;
     }
