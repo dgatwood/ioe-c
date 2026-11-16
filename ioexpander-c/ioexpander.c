@@ -370,7 +370,6 @@ bool _ioe_i2c_write8(ioexpander_t *ioe, uint8_t reg, uint8_t value) {
 
 /** Set up a rotary encoder. */
 void setup_rotary_encoder(ioexpander_t *ioe, int channel, int pinNumberA, int pinNumberB, int pinNumberC /* 0 for none */, bool count_microsteps /* false */) {
-    channel -= 1;
     ioe_set_mode(ioe, pinNumberA, PIN_MODE_PU, true, false);
     ioe_set_mode(ioe, pinNumberB, PIN_MODE_PU, true, false);
     if (pinNumberC > 0) {
@@ -387,6 +386,7 @@ void setup_rotary_encoder(ioexpander_t *ioe, int channel, int pinNumberA, int pi
             fprintf(stderr, "Invalid channel: %d\n", channel);
             exit(1);
     }
+    channel -= 1;
     _ioe_i2c_write8(ioe, reg, pinNumberA | (pinNumberB << 4));
     _ioe_change_bit(ioe, REG_ENC_EN, channel * 2 + 1, count_microsteps);
     _ioe_set_bit(ioe, REG_ENC_EN, channel * 2);
@@ -394,7 +394,6 @@ void setup_rotary_encoder(ioexpander_t *ioe, int channel, int pinNumberA, int pi
 
 /** Read the step count from a rotary encoder. */
 int read_rotary_encoder(ioexpander_t *ioe, int channel) {
-    int last = ioe->_encoder_last[channel];
     uint8_t reg = 0;
     switch(channel) {
         case 1: reg = REG_ENC_1_COUNT; break;
@@ -406,7 +405,11 @@ int read_rotary_encoder(ioexpander_t *ioe, int channel) {
             exit(1);
     }
 
+    int last = ioe->_encoder_last[channel - 1];
     int value = _ioe_i2c_read8(ioe, reg);
+    if (value < 0) {
+        return ioe->_encoder_offset[channel - 1] + last;
+    }
     if (value & 0b10000000) {
         value -= 256;
     }
