@@ -104,9 +104,9 @@ void _ioe_adc_pin_init(pin_t *pin, int port, int pinNumber, int channel);
 void _ioe_pwm_pin_init(pin_t *pin, int port, int pinNumber, int channel, uint8_t reg_iopwm);
 void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigger /* false */, bool invert /* false */);
 void _ioe_output(ioexpander_t *ioe, int pinNumber, uint32_t value);
-void _ioe_set_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit);
-void _ioe_clr_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits);
-void _ioe_change_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit, bool state);
+bool _ioe_set_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit);
+bool _ioe_clr_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits);
+bool _ioe_change_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit, bool state);
 double _ioe_fractime(void);
 
 
@@ -424,49 +424,55 @@ int read_rotary_encoder(ioexpander_t *ioe, int channel) {
 }
 
 /** Set the specified bits (using a mask) in a register. */
-void _ioe_set_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
+bool _ioe_set_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
     if (isBitAddressedReg(reg)) {  // What is this?
         for (int bit = 0; bit < 8; bit++) {
             if (bits & (1 << bit)) {
-                _ioe_i2c_write8(ioe, reg, 0b1000 | (bit & 0b111));
+                if (!_ioe_i2c_write8(ioe, reg, 0b1000 | (bit & 0b111))) {
+                    return false;
+                }
             }
         }
+        return true;
     } else {
         int16_t value = _ioe_i2c_read8(ioe, reg);
         if (value < 0) {
-            return;
+            return false;
         }
         usleep(1000);
-        _ioe_i2c_write8(ioe, reg, value | bits);
+        return _ioe_i2c_write8(ioe, reg, value | bits);
     }
 }
 
 /** Set the specified bit (nth position from right) in a register. */
-void _ioe_set_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
-    _ioe_set_bits(ioe, reg, (1 << bit));
+bool _ioe_set_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
+    return _ioe_set_bits(ioe, reg, (1 << bit));
 }
 
 /** Clear the specified bits (using a mask) in a register. */
-void _ioe_clr_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
+bool _ioe_clr_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
     if (isBitAddressedReg(reg)) {
         for (int bit = 0; bit < 8; bit++) {
             if (bits & (1 << bit)) {
-                _ioe_i2c_write8(ioe, reg, 0b0000 | (bit & 0b111));
+                if (!_ioe_i2c_write8(ioe, reg, 0b0000 | (bit & 0b111))) {
+                    return false;
+                }
             }
         }
+        return true;
     } else {
         int16_t value = _ioe_i2c_read8(ioe, reg);
         if (value < 0) {
-            return;
+            return false;
         }
         usleep(1000);
-        _ioe_i2c_write8(ioe, reg, value & ~bits);
+        return _ioe_i2c_write8(ioe, reg, value & ~bits);
     }
 }
 
 /** Clear the specified bit (nth position from right) in a register. */
-void _ioe_clr_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
-    _ioe_clr_bits(ioe, reg, (1 << bit));
+bool _ioe_clr_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
+    return _ioe_clr_bits(ioe, reg, (1 << bit));
 }
 
 /** Returns the specified bit (nth position from right) from a register. */
@@ -479,11 +485,11 @@ bool _ioe_get_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
 }
 
 /** Toggle one register bit on/off. */
-void _ioe_change_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit, bool state) {
+bool _ioe_change_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit, bool state) {
     if (state) {
-        _ioe_set_bit(ioe, reg, bit);
+        return _ioe_set_bit(ioe, reg, bit);
     } else {
-        _ioe_clr_bit(ioe, reg, bit);
+        return _ioe_clr_bit(ioe, reg, bit);
     }
 }
 
@@ -688,21 +694,24 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
         exit(1);
     }
 
-    io_pin->mode = mode;
     if (ioe->_debug) {
         printf("Setting pin %d to mode %d %s %s, state: %s\n", pinNumber, io_mode, MODE_NAMES[io_mode], GPIO_NAMES[gpio_mode], STATE_NAMES[initial_state]);
     }
 
     if (mode == PIN_MODE_PWM) {
-        _ioe_set_bit(ioe, io_pin->reg_iopwm, io_pin->pwm_channel);
-        _ioe_change_bit(ioe, REG_PNP, io_pin->pwm_channel, invert);
-        _ioe_set_bit(ioe, REG_PWMCON0, 7);  // Set PWMRUN bit;
+        if (!_ioe_set_bit(ioe, io_pin->reg_iopwm, io_pin->pwm_channel) ||
+            !_ioe_change_bit(ioe, REG_PNP, io_pin->pwm_channel, invert) ||
+            !_ioe_set_bit(ioe, REG_PWMCON0, 7)) {  // Set PWMRUN bit;
+            return;
+        }
     } else {
         if (io_pin->modeSupported[PIN_MODE_PWM]) {
             if (ioe->_debug) {
                 fprintf(stderr, "Disabling PWM on pin %d\n", pinNumber);
             }
-            _ioe_clr_bit(ioe, io_pin->reg_iopwm, io_pin->pwm_channel);
+            if (!_ioe_clr_bit(ioe, io_pin->reg_iopwm, io_pin->pwm_channel)) {
+                return;
+            }
         }
     }
 
@@ -720,16 +729,24 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
     pm1 |= (gpio_mode >> 1) << io_pin->pinNumber;
     pm2 |= (gpio_mode & 0b1) << io_pin->pinNumber;
 
-    _ioe_i2c_write8(ioe, io_pin->reg_m1, pm1);
-    _ioe_i2c_write8(ioe, io_pin->reg_m2, pm2);
+    if (!_ioe_i2c_write8(ioe, io_pin->reg_m1, pm1) ||
+        !_ioe_i2c_write8(ioe, io_pin->reg_m2, pm2)) {
+        return;
+    }
 
     // Set up Schmitt trigger mode on inputs
     if (mode == PIN_MODE_PU || mode == PIN_MODE_IN) {
-        _ioe_change_bit(ioe, io_pin->reg_ps, io_pin->pinNumber, schmitt_trigger);
+        if (!_ioe_change_bit(ioe, io_pin->reg_ps, io_pin->pinNumber, schmitt_trigger)) {
+            return;
+        }
     }
 
     // 5th bit of mode encodes default output pin state
-    _ioe_i2c_write8(ioe, io_pin->reg_p, (initial_state << 3) | io_pin->pinNumber);
+    if (!_ioe_i2c_write8(ioe, io_pin->reg_p, (initial_state << 3) | io_pin->pinNumber)) {
+        return;
+    }
+
+    io_pin->mode = mode;
 }
 
 /**
