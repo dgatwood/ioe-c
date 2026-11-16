@@ -773,21 +773,22 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
             printf("Reading ADC from pin %d\n", pinNumber);
             printf("ADC Channel: %d\n", io_pin->adc_channel);
         }
-        _ioe_clr_bits(ioe, REG_ADCCON0, 0x0f);
-        _ioe_set_bits(ioe, REG_ADCCON0, io_pin->adc_channel);
-        _ioe_i2c_write8(ioe, REG_AINDIDS, 0);
-        _ioe_set_bit(ioe, REG_AINDIDS, io_pin->adc_channel);
-        _ioe_set_bit(ioe, REG_ADCCON1, 0);
-
-        _ioe_clr_bit(ioe, REG_ADCCON0, 7);  // ADCF - Clear the conversion complete flag
-        _ioe_set_bit(ioe, REG_ADCCON0, 6);  // ADCS - Set the ADC conversion start flag
+        if (!_ioe_clr_bits(ioe, REG_ADCCON0, 0x0f) ||
+            !_ioe_set_bits(ioe, REG_ADCCON0, io_pin->adc_channel) ||
+            !_ioe_i2c_write8(ioe, REG_AINDIDS, 0) ||
+            !_ioe_set_bit(ioe, REG_AINDIDS, io_pin->adc_channel) ||
+            !_ioe_set_bit(ioe, REG_ADCCON1, 0) ||
+            !_ioe_clr_bit(ioe, REG_ADCCON0, 7) ||  // ADCF - Clear the conversion complete flag
+            !_ioe_set_bit(ioe, REG_ADCCON0, 6)) {  // ADCS - Set the ADC conversion start flag
+            return -1;
+        }
 
         // Wait for the ADCF conversion complete flag to be set
         double t_start = _ioe_fractime();
         while (!_ioe_get_bit(ioe, REG_ADCCON0, 7)) {
             if (_ioe_fractime() - t_start >= adc_timeout) {
                 fprintf(stderr, "Timeout waiting for ADC conversion!\n");
-                exit(1);
+                return -1;
             }
             usleep((useconds_t)((adc_timeout / 10.0) * 1000000.0));
         }
