@@ -112,6 +112,7 @@ double _ioe_fractime(void);
 
 pin_t *ioe_pin(int port, int pinNumber) {
     pin_t *pin = (pin_t *)malloc(sizeof(*pin));
+    bzero(pin, sizeof(*pin));
     pin->modeSupported[PIN_MODE_IO] = true;
     pin->mode = PIN_MODE_INVALID;
     pin->port = port;
@@ -431,7 +432,10 @@ void _ioe_set_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
             }
         }
     } else {
-        uint8_t value = _ioe_i2c_read8(ioe, reg);
+        int16_t value = _ioe_i2c_read8(ioe, reg);
+        if (value < 0) {
+            return;
+        }
         usleep(1000);
         _ioe_i2c_write8(ioe, reg, value | bits);
     }
@@ -451,7 +455,10 @@ void _ioe_clr_bits(ioexpander_t *ioe, uint8_t reg, uint8_t bits) {
             }
         }
     } else {
-        uint8_t value = _ioe_i2c_read8(ioe, reg);
+        int16_t value = _ioe_i2c_read8(ioe, reg);
+        if (value < 0) {
+            return;
+        }
         usleep(1000);
         _ioe_i2c_write8(ioe, reg, value & ~bits);
     }
@@ -464,7 +471,11 @@ void _ioe_clr_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
 
 /** Returns the specified bit (nth position from right) from a register. */
 bool _ioe_get_bit(ioexpander_t *ioe, uint8_t reg, uint8_t bit) {
-    return (_ioe_i2c_read8(ioe, reg) & (1 << bit)) != 0;
+    int16_t value = _ioe_i2c_read8(ioe, reg);
+    if (value < 0) {
+        return false;
+    }
+    return (value & (1 << bit)) != 0;
 }
 
 /** Toggle one register bit on/off. */
@@ -697,6 +708,9 @@ void ioe_set_mode(ioexpander_t *ioe, int pinNumber, int mode, bool schmitt_trigg
 
     int pm1 = _ioe_i2c_read8(ioe, io_pin->reg_m1);
     int pm2 = _ioe_i2c_read8(ioe, io_pin->reg_m2);
+    if (pm1 < 0 || pm2 < 0) {
+        return;
+    }
 
     // Clear the pm1 and pm2 bits
     pm1 &= 255 - (1 << io_pin->pinNumber);
