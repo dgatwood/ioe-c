@@ -754,11 +754,11 @@ int input(ioexpander_t *ioe, int pinNumber, double adc_timeout /* 1.0 */) {
         // Wait for the ADCF conversion complete flag to be set
         double t_start = _ioe_fractime();
         while (!_ioe_get_bit(ioe, REG_ADCCON0, 7)) {
-            usleep(10000);
             if (_ioe_fractime() - t_start >= adc_timeout) {
                 fprintf(stderr, "Timeout waiting for ADC conversion!\n");
                 exit(1);
             }
+            usleep((useconds_t)((adc_timeout / 10.0) * 1000000.0));
         }
 
         int16_t hi = _ioe_i2c_read8(ioe, REG_ADCRH);
