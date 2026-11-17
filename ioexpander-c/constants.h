@@ -1,3 +1,6 @@
+#ifndef __CAMERA_CONTROL_CONSTANTS_H__
+#define __CAMERA_CONTROL_CONSTANTS_H__
+
 #define VERSION "0.0.1"
 
 #define I2C_ADDR 0x18
@@ -235,3 +238,5 @@ static const char *STATE_NAMES[] = {"LOW", "HIGH"};
 
 #define HIGH 1
 #define LOW 0
+
+#endif  // __CAMERA_CONTROL_CONSTANTS_H__
